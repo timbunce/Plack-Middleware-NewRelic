@@ -39,6 +39,11 @@ has transaction_attribute_headers => (
     builder => '_build_transaction_attribute_headers',
 );
 
+has transaction_attribute_params => (
+    is      => 'ro',
+    builder => '_build_transaction_attribute_params',
+);
+
 has path_rules => (
     is      => 'ro',
     default => sub { {} },
@@ -79,6 +84,10 @@ sub _build_agent {
 
 sub _build_transaction_attribute_headers {
     return [ qw/Accept Accept-Language User-Agent/ ];
+}
+
+sub _build_transaction_attribute_params {
+    return [ ];
 }
 
 
@@ -150,9 +159,23 @@ sub begin_transaction {
 
     for my $key (@{ $self->transaction_attribute_headers }) {
         my $value = $req->header($key);
-        $agent->add_transaction_attribute($txn_id, $key, $value)
+        # the ":" suffix on the key serves to distinguish HTTP headers from params below
+        $agent->add_transaction_attribute($txn_id, $key.":", $value)
             if $value;
     }
+
+    # record the whole undecoded query string by default
+    $agent->add_transaction_attribute($txn_id, "QUERY_STRING", $req->query_string);
+
+    for my $key (@{ $self->transaction_attribute_params }) {
+        # we use get_all to deal with multiple params with the same name
+        my @values = $req->parameters->get_all($key);
+        # Keys and values are truncated at 256 bytes.
+        # https://docs.newrelic.com/docs/apm/other-features/attributes/agent-attributes#attlimits
+        $agent->add_transaction_attribute($txn_id, $key, join(", ", @values))
+            if @values;
+    }
+
 }
 
 
