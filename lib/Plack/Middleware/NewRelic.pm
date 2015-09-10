@@ -118,7 +118,6 @@ sub call {
                 my $chunk = shift;
                 if (!defined $chunk) {
                     $self->end_transaction($env, $res);
-                    return;
                 }
                 return $chunk;
             }
@@ -150,6 +149,10 @@ sub begin_transaction {
 
     # Populate initial transaction data
 
+    # This throws an exception if the request_uri doesn't include a path
+    # e.g. "/?foo=bar" works but "?foo=bar" throws an exception:
+    # "Caught C++ exception of type or derived from 'std::exception': basic_string::_S_construct NULL not valid"
+    # This is only likely to hit you when using Plack::Test
     $agent->set_transaction_request_url($txn_id, $req->request_uri);
 
     my $method = $req->method;
@@ -164,7 +167,7 @@ sub begin_transaction {
             if $value;
     }
 
-    # record the whole undecoded query string by default
+    # record the whole undecoded query string by default, cheap and useful
     $agent->add_transaction_attribute($txn_id, "QUERY_STRING", $req->query_string);
 
     for my $key (@{ $self->transaction_attribute_params }) {
